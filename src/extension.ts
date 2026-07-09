@@ -15,7 +15,8 @@ import { BugVaultTreeProvider } from './ui/bugVaultPanel';
 import { StatusBarIndicator } from './ui/statusBarIndicator';
 import { BugCodeLensProvider } from './ui/bugCodeLens';
 import { registerCommands } from './commands/registerCommands';
-import { getSupermemoryUrl, getSimilarityThreshold, isAutoCaptureEnabled } from './utils/config';
+import { getSupermemoryUrl, getSimilarityThreshold, isAutoCaptureEnabled,
+         isSharedMemoryEnabled, getSharedMemoryUrl } from './utils/config';
 import { log, logError } from './utils/logger';
 import { BugEvent } from './capture/bugEvent';
 
@@ -25,8 +26,22 @@ export function activate(context: vscode.ExtensionContext): void {
   const db = getDatabase(context.globalStorageUri.fsPath);
   const repo = new BugRepository(db);
   const stats = new StatsRepository(db);
+
+  // Personal Supermemory (always instantiated)
   const supermemory = new SupermemoryClient(getSupermemoryUrl());
-  const matchEngine = new MatchEngine(supermemory, repo, getSimilarityThreshold());
+
+  // Shared/team Supermemory — only created when the feature is enabled.
+  // Re-read the setting at event-handling time so toggling it mid-session works.
+  const sharedSupermemory = isSharedMemoryEnabled()
+    ? new SupermemoryClient(getSharedMemoryUrl())
+    : undefined;
+
+  const matchEngine = new MatchEngine(
+    supermemory,
+    repo,
+    getSimilarityThreshold(),
+    sharedSupermemory
+  );
 
   const treeProvider = new BugVaultTreeProvider(repo);
   vscode.window.registerTreeDataProvider('bugvault.recentBugs', treeProvider);
@@ -39,7 +54,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const statusBar = new StatusBarIndicator(repo, stats);
   context.subscriptions.push({ dispose: () => statusBar.dispose() });
 
-  registerCommands(context, repo, supermemory, treeProvider);
+  registerCommands(context, repo, supermemory, treeProvider, sharedSupermemory);
 
   const tracker = new BugTracker(repo, async bugId => {
     codeLens.removeLensForBug(bugId);   // clear gutter annotation on resolve
@@ -58,9 +73,10 @@ export function activate(context: vscode.ExtensionContext): void {
         // --- Feature 4: Confidence bar WebView for semantic, plain toast for fingerprint ---
         if (outcome.via === 'semantic' && outcome.score !== undefined) {
           const bug = repo.findById(outcome.bugId);
-          if (bug) showConfidencePopup(context, bug, outcome.score);
+          if (bug) showConfidencePopup(context, bug, outcome.score, outcome.fromShared, outcome.teamFix);
         } else {
-          await showRepeatedBugPopup(outcome.bugId, repo, outcome.via, outcome.score);
+          await showRepeatedBugPopup(outcome.bugId, repo, outcome.via, outcome.score,
+            outcome.fromShared, outcome.teamFix);
         }
 
         tracker.registerActiveBug(outcome.bugId, event.filePath, event.taskName, event.exitCode);

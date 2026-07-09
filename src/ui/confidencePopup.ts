@@ -10,7 +10,9 @@ let currentPanel: vscode.WebviewPanel | undefined;
 export function showConfidencePopup(
   context: vscode.ExtensionContext,
   bug: BugRecord,
-  score: number
+  score: number,
+  fromShared = false,
+  teamFix?: string
 ): void {
   const pct = Math.round(score * 100);
 
@@ -42,17 +44,24 @@ export function showConfidencePopup(
     }, undefined, context.subscriptions);
   }
 
-  currentPanel.webview.html = buildHtml(bug, pct);
+  currentPanel.webview.html = buildHtml(bug, pct, fromShared, teamFix);
 }
 
-function buildHtml(bug: BugRecord, pct: number): string {
+function buildHtml(bug: BugRecord, pct: number, fromShared = false, teamFix?: string): string {
   // Color: green ≥80, amber 55-79, red <55
   const barColor = pct >= 80 ? '#4ade80' : pct >= 55 ? '#fbbf24' : '#f87171';
   const badgeColor = pct >= 80 ? '#16a34a' : pct >= 55 ? '#d97706' : '#dc2626';
   const label = pct >= 80 ? 'High confidence' : pct >= 55 ? 'Moderate confidence' : 'Low confidence';
 
-  const fixHtml = bug.fix
-    ? `<div class="fix-box"><span class="fix-label">Last fix</span><p class="fix-text">${escHtml(bug.fix)}</p></div>`
+  const effectiveFix = teamFix || bug.fix;
+  const fixOriginLabel = (fromShared && teamFix) ? '👥 Team Fix' : 'Last Fix';
+
+  const teamBadgeHtml = fromShared
+    ? `<span class="team-badge">👥 Team Memory</span>`
+    : '';
+
+  const fixHtml = effectiveFix
+    ? `<div class="fix-box"><span class="fix-label">${fixOriginLabel}</span><p class="fix-text">${escHtml(effectiveFix)}</p></div>`
     : `<p class="no-fix">⚠ No fix was saved for this bug yet.</p>`;
 
   return /* html */`<!DOCTYPE html>
@@ -116,6 +125,18 @@ function buildHtml(bug: BugRecord, pct: number): string {
       color: ${badgeColor};
       border: 1px solid ${badgeColor}55;
       white-space: nowrap;
+    }
+
+    .team-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 99px;
+      background: #6366f122;
+      color: #818cf8;
+      border: 1px solid #6366f155;
+      white-space: nowrap;
+      margin-left: 6px;
     }
 
     /* ── Confidence bar ── */
@@ -262,6 +283,7 @@ function buildHtml(bug: BugRecord, pct: number): string {
       <span class="icon">🐛</span>
       <span class="title">Similar Bug Detected</span>
       <span class="badge">${label}</span>
+      ${teamBadgeHtml}
     </div>
 
     <div class="confidence-section">

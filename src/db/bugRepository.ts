@@ -98,4 +98,11 @@ export class BugRepository {
       .prepare('SELECT * FROM bugs ORDER BY last_seen DESC LIMIT ?')
       .all(limit) as BugRecord[];
   }
+
+  /** Back-fill a memory_id after the entry is pushed to (shared) Supermemory. */
+  updateMemoryId(id: number, memoryId: string): void {
+    this.db
+      .prepare('UPDATE bugs SET memory_id = ? WHERE id = ?')
+      .run(memoryId, id);
+  }
 }

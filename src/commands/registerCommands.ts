@@ -3,6 +3,7 @@ import { BugRepository, BugRecord } from '../db/bugRepository';
 import { SupermemoryClient } from '../memory/supermemoryClient';
 import { showBugDetail } from '../ui/bugDetailView';
 import { BugVaultTreeProvider } from '../ui/bugVaultPanel';
+import { isSharedMemoryEnabled } from '../utils/config';
 import * as cp from 'child_process';
 import * as util from 'util';
 
@@ -69,8 +70,36 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   repo: BugRepository,
   supermemory: SupermemoryClient,
-  treeProvider: BugVaultTreeProvider
+  treeProvider: BugVaultTreeProvider,
+  sharedSupermemory?: SupermemoryClient
 ): void {
+
+  /**
+   * Push a fix to the correct Supermemory endpoint.
+   * In shared mode: shared first, then fall back to personal.
+   * If the bug has no memory_id yet, add a new entry and back-fill it.
+   */
+  async function syncFixToMemory(bug: BugRecord, fix: string): Promise<void> {
+    const client = (isSharedMemoryEnabled() && sharedSupermemory) ? sharedSupermemory : supermemory;
+    try {
+      if (bug.memory_id) {
+        await client.updateMemory(bug.memory_id, bug.error_message, {
+          project: bug.project_name,
+          fix
+        });
+      } else {
+        // Bug was captured before memory was available — add it now
+        const newId = await client.addMemory(bug.error_message, {
+          project: bug.project_name,
+          fix
+        });
+        repo.updateMemoryId(bug.id, newId);
+      }
+    } catch (err) {
+      console.error('BugVault: failed to sync fix to memory', err);
+    }
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand('bugvault.markSolved', async (bugId: number) => {
       const bug = repo.findById(bugId);
@@ -83,16 +112,13 @@ export function registerCommands(
       }, async () => {
         const fix = await generateSolutionWithAI(bug);
         repo.markSolved(bugId, fix);
-        
-        if (bug.memory_id) {
-          await supermemory.updateMemory(bug.memory_id, bug.error_message, {
-            project: bug.project_name,
-            fix
-          });
-        }
-        
+        await syncFixToMemory(bug, fix);
         treeProvider.refresh();
-        vscode.window.showInformationMessage('BugVault: Bug marked as solved with AI generated solution.');
+        vscode.window.showInformationMessage(
+          isSharedMemoryEnabled()
+            ? 'BugVault: Bug marked as solved — fix saved to Team Memory.'
+            : 'BugVault: Bug marked as solved with AI generated solution.'
+        );
       });
     }),
 
@@ -108,16 +134,14 @@ export function registerCommands(
       if (!fix) return;
 
       repo.markSolved(bugId, fix);
-
-      if (bug.memory_id) {
-        await supermemory.updateMemory(bug.memory_id, bug.error_message, {
-          project: bug.project_name,
-          fix
-        });
-      }
+      await syncFixToMemory(bug, fix);
 
       treeProvider.refresh();
-      vscode.window.showInformationMessage('BugVault: Fix updated successfully.');
+      vscode.window.showInformationMessage(
+        isSharedMemoryEnabled()
+          ? 'BugVault: Fix updated and synced to Team Memory.'
+          : 'BugVault: Fix updated successfully.'
+      );
     }),
 
     vscode.commands.registerCommand('bugvault.showRelatedBugs', (bugId: number) => {

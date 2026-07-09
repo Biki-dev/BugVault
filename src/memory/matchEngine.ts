@@ -10,53 +10,86 @@ export class MatchEngine {
   constructor(
     private supermemory: SupermemoryClient,
     private repo: BugRepository,
-    private similarityThreshold: number
+    private similarityThreshold: number,
+    /** Optional separate shared-memory client. When present it is searched first. */
+    private sharedSupermemory?: SupermemoryClient
   ) {}
 
   async processBugEvent(event: BugEvent): Promise<MatchOutcome> {
     const fingerprint = fingerprintError(event.rawText);
     const normalizedText = getNormalizedText(event.rawText);
 
-    // Stage A: exact fingerprint match
+    // ── Stage A: exact fingerprint match (local DB) ────────────────────────
     const exactMatch = this.repo.findByFingerprint(fingerprint);
     if (exactMatch) {
       this.repo.incrementOccurrence(exactMatch.id);
       return { kind: 'repeated', via: 'fingerprint', bugId: exactMatch.id };
     }
 
-    // Stage B: semantic match via Supermemory
-    const alive = await this.supermemory.isAlive();
-    if (alive) {
-      const results = await this.supermemory.search(normalizedText, 3);
-      const topMatch = results[0];
+    // ── Stage B: semantic search — shared memory first, personal second ────
+    // Try shared memory
+    if (this.sharedSupermemory) {
+      const sharedAlive = await this.sharedSupermemory.isAlive();
+      if (sharedAlive) {
+        const results = await this.sharedSupermemory.search(normalizedText, 3);
+        const top = results[0];
+        if (top && top.score >= this.similarityThreshold) {
+          // Find the local record that mirrors this shared memory entry
+          const localBug = this.repo.findByMemoryId(top.memoryId);
+          if (localBug) {
+            this.repo.incrementOccurrence(localBug.id);
+            return {
+              kind: 'repeated',
+              via: 'semantic',
+              bugId: localBug.id,
+              score: top.score,
+              fromShared: true,
+              teamFix: (top.metadata['fix'] as string) ?? undefined
+            };
+          }
+        }
+      }
+    }
 
-      if (topMatch && topMatch.score >= this.similarityThreshold) {
-        const existingBug = this.repo.findByMemoryId(topMatch.memoryId);
+    // Try personal/local memory
+    const personalAlive = await this.supermemory.isAlive();
+    if (personalAlive) {
+      const results = await this.supermemory.search(normalizedText, 3);
+      const top = results[0];
+      if (top && top.score >= this.similarityThreshold) {
+        const existingBug = this.repo.findByMemoryId(top.memoryId);
         if (existingBug) {
           this.repo.incrementOccurrence(existingBug.id);
           return {
             kind: 'repeated',
             via: 'semantic',
             bugId: existingBug.id,
-            score: topMatch.score
+            score: top.score,
+            fromShared: false
           };
         }
       }
     }
 
-    // No match -> new bug. Store in both SQLite and Supermemory.
+    // ── Stage C: new bug — store locally and in the active Supermemory ─────
     const gitInfo = await getGitInfo(event.cwd);
 
+    // Prefer shared memory for storage when it's available
+    const activeClient = this.sharedSupermemory ?? this.supermemory;
+    const activeAlive = this.sharedSupermemory
+      ? await this.sharedSupermemory.isAlive()
+      : personalAlive;
+
     let memoryId: string | null = null;
-    if (alive) {
-      memoryId = await this.supermemory.addMemory(normalizedText, {
+    if (activeAlive) {
+      memoryId = await activeClient.addMemory(normalizedText, {
         project: event.projectName,
         source: event.source,
         rawText: event.rawText
       });
     }
 
-    const bugId = this.repo.create({
+    this.repo.create({
       fingerprint,
       memory_id: memoryId,
       project_name: event.projectName,

@@ -69,6 +69,16 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically capture terminal, diagnostic, and build errors."
+        },
+        "bugvault.sharedMemory.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable team/shared memory mode. When on, BugVault connects to the shared Supermemory URL so all developers share one knowledge base."
+        },
+        "bugvault.sharedMemory.url": {
+          "type": "string",
+          "default": "http://localhost:6767",
+          "description": "URL of the shared team Supermemory instance used when sharedMemory.enabled is true."
         }
       }
     }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { BugRepository } from '../db/bugRepository';
 import { StatsRepository } from '../db/statsRepository';
+import { isSharedMemoryEnabled } from '../utils/config';
 
 export class StatusBarIndicator {
   private bugItem: vscode.StatusBarItem;
@@ -23,8 +24,11 @@ export class StatusBarIndicator {
 
   refresh(): void {
     const activeCount = this.repo.listActive().length;
-    this.bugItem.text = `$(bug) BugVault: ${activeCount}`;
-    this.bugItem.tooltip = `${activeCount} active bug(s) tracked — click to open BugVault panel`;
+    const sharedIcon = isSharedMemoryEnabled() ? ' 👥' : '';
+    this.bugItem.text = `$(bug) BugVault: ${activeCount}${sharedIcon}`;
+    this.bugItem.tooltip = isSharedMemoryEnabled()
+      ? `${activeCount} active bug(s) tracked — Team Memory ON — click to open BugVault panel`
+      : `${activeCount} active bug(s) tracked — click to open BugVault panel`;
 
     const totalMinutes = this.stats.getTotalMinutesSaved();
     const repeats = this.stats.getRepeatsCaught();
