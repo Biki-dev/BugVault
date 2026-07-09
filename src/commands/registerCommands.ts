@@ -1,16 +1,54 @@
 import * as vscode from 'vscode';
-import { BugRepository } from '../db/bugRepository';
+import { BugRepository, BugRecord } from '../db/bugRepository';
 import { SupermemoryClient } from '../memory/supermemoryClient';
 import { showBugDetail } from '../ui/bugDetailView';
 import { BugVaultTreeProvider } from '../ui/bugVaultPanel';
+import * as cp from 'child_process';
+import * as util from 'util';
 
-async function generateSolutionWithAI(bugErrorMessage: string): Promise<string> {
+const exec = util.promisify(cp.exec);
+
+async function generateSolutionWithAI(bug: BugRecord): Promise<string> {
   try {
     const models = await vscode.lm.selectChatModels();
     if (models && models.length > 0) {
       const model = models[0];
+
+      let contextStr = `Error Message:\n${bug.error_message}\n\n`;
+
+      if (bug.file_path) {
+        contextStr += `File Path: ${bug.file_path}\n`;
+      }
+      
+      if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+        contextStr += `Project Path: ${vscode.workspace.workspaceFolders[0].uri.fsPath}\n`;
+      }
+
+      const editor = vscode.window.activeTextEditor;
+      if (editor) {
+        contextStr += `\nCurrently Active File: ${editor.document.fileName}\n`;
+        const code = editor.document.getText();
+        if (code) {
+          contextStr += `\nCurrently Active File Content:\n${code.substring(0, 3000)}\n`;
+        }
+      }
+
+      if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+        try {
+          const cwd = vscode.workspace.workspaceFolders[0].uri.fsPath;
+          const { stdout } = await exec('git diff HEAD', { cwd, timeout: 5000 });
+          if (stdout && stdout.trim().length > 0) {
+            contextStr += `\nRecent Git Changes (Potential Fix):\n${stdout.substring(0, 3000)}\n`;
+          }
+        } catch (e) {
+          console.error('Failed to get git diff:', e);
+        }
+      }
+
+      const prompt = `Please provide a concise solution for this bug based on the following context. Pay special attention to the Git Changes as they likely contain the user's actual fix:\n\n${contextStr}`;
+
       const messages = [
-        vscode.LanguageModelChatMessage.User(`Please provide a concise solution for this error: ${bugErrorMessage}`)
+        vscode.LanguageModelChatMessage.User(prompt)
       ];
       const response = await model.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
       let solution = '';
@@ -43,7 +81,7 @@ export function registerCommands(
         title: 'BugVault: Auto-generating solution with AI...',
         cancellable: false
       }, async () => {
-        const fix = await generateSolutionWithAI(bug.error_message);
+        const fix = await generateSolutionWithAI(bug);
         repo.markSolved(bugId, fix);
         
         if (bug.memory_id) {
