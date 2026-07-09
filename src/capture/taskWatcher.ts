@@ -17,7 +17,9 @@ export function startTaskWatcher(
         source: 'task',
         rawText: `Task "${taskName}" failed with exit code ${exitCode}`,
         projectName: getProjectName(),
-        cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ''
+        cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '',
+        taskName,
+        exitCode
       });
 
       onBug(bugEvent);

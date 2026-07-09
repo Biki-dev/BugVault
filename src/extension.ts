@@ -46,12 +46,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
       if (outcome.kind === 'repeated') {
         await showRepeatedBugPopup(outcome.bugId, repo, outcome.via, outcome.score);
-        tracker.registerActiveBug(outcome.bugId, event.filePath);
+        tracker.registerActiveBug(outcome.bugId, event.filePath, event.taskName, event.exitCode);
       } else {
         // Newly stored bug — find it again so we can track it until solved.
         const recent = repo.listRecent(1)[0];
         if (recent) {
-          tracker.registerActiveBug(recent.id, event.filePath);
+          tracker.registerActiveBug(recent.id, event.filePath, event.taskName, event.exitCode);
         }
       }
 

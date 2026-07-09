@@ -5,17 +5,19 @@ import { log } from '../utils/logger';
 export class BugTracker {
   // Maps file path -> active bug id, for diagnostics-sourced bugs
   private activeByFile = new Map<string, number>();
-  // Maps task name -> active bug id, for task-sourced bugs
-  private activeByTask = new Map<string, number>();
+  // Maps task name -> { bugId: number, exitCode: number }, for task-sourced bugs
+  private activeByTask = new Map<string, { bugId: number, exitCode: number }>();
 
   constructor(
     private repo: BugRepository,
     private onResolved: (bugId: number) => void
   ) {}
 
-  registerActiveBug(bugId: number, filePath?: string, taskName?: string): void {
+  registerActiveBug(bugId: number, filePath?: string, taskName?: string, exitCode?: number): void {
     if (filePath) this.activeByFile.set(filePath, bugId);
-    if (taskName) this.activeByTask.set(taskName, bugId);
+    if (taskName && exitCode !== undefined) {
+      this.activeByTask.set(taskName, { bugId, exitCode });
+    }
   }
 
   watchDiagnosticsClear(): vscode.Disposable {
@@ -39,13 +41,13 @@ export class BugTracker {
   }
 
   handleTaskExit(taskName: string, exitCode: number | undefined): void {
-    const bugId = this.activeByTask.get(taskName);
-    if (bugId === undefined) return;
+    const active = this.activeByTask.get(taskName);
+    if (!active) return;
 
-    if (exitCode === 0) {
-      log(`Bug ${bugId} appears resolved (task "${taskName}" now exits 0)`);
+    if (active.exitCode !== exitCode) {
+      log(`Bug ${active.bugId} appears resolved (task "${taskName}" exited with ${exitCode} instead of ${active.exitCode})`);
       this.activeByTask.delete(taskName);
-      this.onResolved(bugId);
+      this.onResolved(active.bugId);
     }
   }
 }

@@ -9,6 +9,8 @@ export interface BugEvent {
   timestamp: number;
   projectName: string;
   cwd: string;
+  taskName?: string;
+  exitCode?: number;
 }
 
 export function createBugEvent(params: {
@@ -19,6 +21,8 @@ export function createBugEvent(params: {
   language?: string;
   projectName: string;
   cwd: string;
+  taskName?: string;
+  exitCode?: number;
 }): BugEvent {
   return {
     source: params.source,
@@ -28,6 +32,8 @@ export function createBugEvent(params: {
     language: params.language,
     timestamp: Date.now(),
     projectName: params.projectName,
-    cwd: params.cwd
+    cwd: params.cwd,
+    taskName: params.taskName,
+    exitCode: params.exitCode
   };
 }
