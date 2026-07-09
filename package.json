@@ -1,0 +1,95 @@
+{
+  "name": "bugvault-ai",
+  "displayName": "BugVault AI",
+  "description": "Automatic bug memory system — detects errors, remembers fixes, warns you when a bug repeats.",
+  "version": "0.1.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Debuggers"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "bugvault.markSolved",
+        "title": "BugVault: Mark as Solved"
+      },
+      {
+        "command": "bugvault.saveFix",
+        "title": "BugVault: Edit Fix"
+      },
+      {
+        "command": "bugvault.showRelatedBugs",
+        "title": "BugVault: Show Related Bugs"
+      },
+      {
+        "command": "bugvault.openPanel",
+        "title": "BugVault: Open Bug Vault Panel"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "bugvault-sidebar",
+          "title": "BugVault",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "bugvault-sidebar": [
+        {
+          "id": "bugvault.recentBugs",
+          "name": "Recent Bugs",
+          "type": "tree"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "BugVault AI",
+      "properties": {
+        "bugvault.supermemoryUrl": {
+          "type": "string",
+          "default": "http://localhost:6767",
+          "description": "URL of the local Supermemory instance."
+        },
+        "bugvault.similarityThreshold": {
+          "type": "number",
+          "default": 0.82,
+          "description": "Minimum semantic similarity score (0-1) to treat a bug as repeated."
+        },
+        "bugvault.enableAutoCapture": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically capture terminal, diagnostic, and build errors."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "node-abi": "^3.94.0",
+    "node-fetch": "^3.3.2"
+  }
+}
