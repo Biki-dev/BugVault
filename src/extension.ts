@@ -10,6 +10,7 @@ import { startTaskWatcher } from './capture/taskWatcher';
 import { BugTracker } from './lifecycle/bugTracker';
 import { promptFixCapture } from './lifecycle/fixCapture';
 import { showRepeatedBugPopup } from './ui/popupNotifier';
+import { showConfidencePopup } from './ui/confidencePopup';
 import { BugVaultTreeProvider } from './ui/bugVaultPanel';
 import { StatusBarIndicator } from './ui/statusBarIndicator';
 import { BugCodeLensProvider } from './ui/bugCodeLens';
@@ -54,7 +55,14 @@ export function activate(context: vscode.ExtensionContext): void {
       const outcome = await matchEngine.processBugEvent(event);
 
       if (outcome.kind === 'repeated') {
-        await showRepeatedBugPopup(outcome.bugId, repo, outcome.via, outcome.score);
+        // --- Feature 4: Confidence bar WebView for semantic, plain toast for fingerprint ---
+        if (outcome.via === 'semantic' && outcome.score !== undefined) {
+          const bug = repo.findById(outcome.bugId);
+          if (bug) showConfidencePopup(context, bug, outcome.score);
+        } else {
+          await showRepeatedBugPopup(outcome.bugId, repo, outcome.via, outcome.score);
+        }
+
         tracker.registerActiveBug(outcome.bugId, event.filePath, event.taskName, event.exitCode);
 
         // --- Feature 1: CodeLens gutter hint ---
