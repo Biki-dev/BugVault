@@ -1,23 +1,46 @@
 import * as vscode from 'vscode';
 import { BugRepository } from '../db/bugRepository';
+import { StatsRepository } from '../db/statsRepository';
 
 export class StatusBarIndicator {
-  private item: vscode.StatusBarItem;
+  private bugItem: vscode.StatusBarItem;
+  private timeSavedItem: vscode.StatusBarItem;
 
-  constructor(private repo: BugRepository) {
-    this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    this.item.command = 'bugvault.openPanel';
-    this.item.show();
+  constructor(
+    private repo: BugRepository,
+    private stats: StatsRepository
+  ) {
+    this.bugItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    this.bugItem.command = 'bugvault.openPanel';
+    this.bugItem.show();
+
+    this.timeSavedItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+    this.timeSavedItem.command = 'bugvault.openPanel';
+    this.timeSavedItem.show();
+
     this.refresh();
   }
 
   refresh(): void {
     const activeCount = this.repo.listActive().length;
-    this.item.text = `$(bug) BugVault: ${activeCount}`;
-    this.item.tooltip = `${activeCount} active bug(s) tracked`;
+    this.bugItem.text = `$(bug) BugVault: ${activeCount}`;
+    this.bugItem.tooltip = `${activeCount} active bug(s) tracked — click to open BugVault panel`;
+
+    const totalMinutes = this.stats.getTotalMinutesSaved();
+    const repeats = this.stats.getRepeatsCaught();
+    const display = this.formatTime(totalMinutes);
+    this.timeSavedItem.text = `$(watch) Saved ~${display}`;
+    this.timeSavedItem.tooltip = `BugVault has caught ${repeats} repeat bug(s), saving you ~${display} of debugging time`;
+  }
+
+  private formatTime(minutes: number): string {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = (minutes / 60).toFixed(1);
+    return `${hours} hrs`;
   }
 
   dispose(): void {
-    this.item.dispose();
+    this.bugItem.dispose();
+    this.timeSavedItem.dispose();
   }
 }
