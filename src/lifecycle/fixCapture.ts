@@ -1,17 +1,20 @@
 import * as vscode from 'vscode';
 import { BugRepository } from '../db/bugRepository';
 import { SupermemoryClient } from '../memory/supermemoryClient';
+import { isSharedMemoryEnabled } from '../utils/config';
 
 export async function promptFixCapture(
   bugId: number,
   repo: BugRepository,
-  supermemory: SupermemoryClient
+  personalSupermemory: SupermemoryClient,
+  sharedSupermemory?: SupermemoryClient
 ): Promise<void> {
   const bug = repo.findById(bugId);
+  // Skip if already solved (e.g. markSolved was called via AI)
   if (!bug || bug.status === 'solved') return;
 
   const choice = await vscode.window.showInformationMessage(
-    `BugVault: Looks like a bug in ${bug.project_name} was just resolved. Save the fix for next time?`,
+    `BugVault: Looks like a bug in "${bug.project_name}" was just resolved. Save the fix for next time?`,
     'Save Fix',
     'Not Now'
   );
@@ -32,13 +35,26 @@ export async function promptFixCapture(
 
   repo.markSolved(bugId, fix, rootCause || undefined);
 
+  // Sync to the active memory client (shared if enabled, personal otherwise)
+  const client = (isSharedMemoryEnabled() && sharedSupermemory)
+    ? sharedSupermemory
+    : personalSupermemory;
+
   if (bug.memory_id) {
-    await supermemory.updateMemory(bug.memory_id, bug.error_message, {
-      project: bug.project_name,
-      fix,
-      rootCause: rootCause || ''
-    });
+    try {
+      await client.updateMemory(bug.memory_id, bug.error_message, {
+        project: bug.project_name,
+        fix,
+        rootCause: rootCause || ''
+      });
+    } catch (err) {
+      // Non-fatal: fix is stored locally, memory sync failed
+      console.error('BugVault: failed to sync fix to memory', err);
+    }
   }
 
-  vscode.window.showInformationMessage('BugVault: Fix saved.');
+  const memLabel = (isSharedMemoryEnabled() && sharedSupermemory)
+    ? ' and synced to Team Memory'
+    : '';
+  vscode.window.showInformationMessage(`BugVault: Fix saved${memLabel}.`);
 }

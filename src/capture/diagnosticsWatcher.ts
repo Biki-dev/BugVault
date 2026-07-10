@@ -21,7 +21,11 @@ export function startDiagnosticsWatcher(
         timeouts.delete(uriString);
 
         const diagnostics = vscode.languages.getDiagnostics(uri)
-          .filter(d => d.severity === vscode.DiagnosticSeverity.Error);
+          .filter(d => d.severity === vscode.DiagnosticSeverity.Error)
+          // Sort by range so we process the topmost error first
+          .sort((a, b) => a.range.start.line - b.range.start.line)
+          // Only process the first error per file to avoid spam on cascading errors
+          .slice(0, 1);
 
         if (diagnostics.length === 0) return;
 

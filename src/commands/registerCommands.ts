@@ -20,17 +20,17 @@ async function generateSolutionWithAI(bug: BugRecord): Promise<string> {
       if (bug.file_path) {
         contextStr += `File Path: ${bug.file_path}\n`;
       }
-      
+
       if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-        contextStr += `Project Path: ${vscode.workspace.workspaceFolders[0].uri.fsPath}\n`;
+        contextStr += `Project: ${vscode.workspace.workspaceFolders[0].uri.fsPath}\n`;
       }
 
       const editor = vscode.window.activeTextEditor;
       if (editor) {
-        contextStr += `\nCurrently Active File: ${editor.document.fileName}\n`;
+        contextStr += `\nActive File: ${editor.document.fileName}\n`;
         const code = editor.document.getText();
         if (code) {
-          contextStr += `\nCurrently Active File Content:\n${code.substring(0, 3000)}\n`;
+          contextStr += `\nFile Content (first 3000 chars):\n${code.substring(0, 3000)}\n`;
         }
       }
 
@@ -39,18 +39,20 @@ async function generateSolutionWithAI(bug: BugRecord): Promise<string> {
           const cwd = vscode.workspace.workspaceFolders[0].uri.fsPath;
           const { stdout } = await exec('git diff HEAD', { cwd, timeout: 5000 });
           if (stdout && stdout.trim().length > 0) {
-            contextStr += `\nRecent Git Changes (Potential Fix):\n${stdout.substring(0, 3000)}\n`;
+            contextStr += `\nRecent Git Changes (likely the fix):\n${stdout.substring(0, 3000)}\n`;
           }
-        } catch (e) {
-          console.error('Failed to get git diff:', e);
+        } catch {
+          // git not available or not a repo — that's fine
         }
       }
 
-      const prompt = `Please provide a concise solution for this bug based on the following context. Pay special attention to the Git Changes as they likely contain the user's actual fix:\n\n${contextStr}`;
+      const prompt = `You are a debugging assistant. Provide a concise, actionable fix for this bug. Focus on what changed and why. Be specific.
 
-      const messages = [
-        vscode.LanguageModelChatMessage.User(prompt)
-      ];
+${contextStr}
+
+Respond in 1-3 short paragraphs. No markdown headers.`;
+
+      const messages = [vscode.LanguageModelChatMessage.User(prompt)];
       const response = await model.sendRequest(messages, {}, new vscode.CancellationTokenSource().token);
       let solution = '';
       for await (const chunk of response.text) {
@@ -58,11 +60,11 @@ async function generateSolutionWithAI(bug: BugRecord): Promise<string> {
       }
       return solution.trim() || 'AI returned an empty response.';
     } else {
-      return 'No AI models available. Please ensure an AI extension (like GitHub Copilot) is installed and active.';
+      return 'No AI model available. Install GitHub Copilot or another VS Code AI extension, then try again.';
     }
   } catch (error: any) {
-    console.error('AI generation failed:', error);
-    return `AI generation failed: ${error.message || 'Unknown error'}`;
+    console.error('BugVault: AI generation failed:', error);
+    return `AI generation failed: ${error.message ?? 'Unknown error'}`;
   }
 }
 
@@ -76,8 +78,8 @@ export function registerCommands(
 
   /**
    * Push a fix to the correct Supermemory endpoint.
-   * In shared mode: shared first, then fall back to personal.
-   * If the bug has no memory_id yet, add a new entry and back-fill it.
+   * Shared memory wins when enabled; falls back to personal.
+   * If the bug has no memory_id yet, adds a new entry and back-fills it.
    */
   async function syncFixToMemory(bug: BugRecord, fix: string): Promise<void> {
     const client = (isSharedMemoryEnabled() && sharedSupermemory) ? sharedSupermemory : supermemory;
@@ -88,7 +90,6 @@ export function registerCommands(
           fix
         });
       } else {
-        // Bug was captured before memory was available — add it now
         const newId = await client.addMemory(bug.error_message, {
           project: bug.project_name,
           fix
@@ -101,13 +102,14 @@ export function registerCommands(
   }
 
   context.subscriptions.push(
+    // ── Mark as Solved with AI ───────────────────────────────────────────────
     vscode.commands.registerCommand('bugvault.markSolved', async (bugId: number) => {
       const bug = repo.findById(bugId);
       if (!bug) return;
 
-      vscode.window.withProgress({
+      await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: 'BugVault: Auto-generating solution with AI...',
+        title: '$(bug) BugVault: Generating AI solution…',
         cancellable: false
       }, async () => {
         const fix = await generateSolutionWithAI(bug);
@@ -116,40 +118,64 @@ export function registerCommands(
         treeProvider.refresh();
         vscode.window.showInformationMessage(
           isSharedMemoryEnabled()
-            ? 'BugVault: Bug marked as solved — fix saved to Team Memory.'
-            : 'BugVault: Bug marked as solved with AI generated solution.'
+            ? '$(check) BugVault: Bug solved — fix saved to Team Memory.'
+            : '$(check) BugVault: Bug solved with AI-generated solution.'
         );
       });
     }),
 
+    // ── Edit Fix ─────────────────────────────────────────────────────────────
     vscode.commands.registerCommand('bugvault.saveFix', async (bugId: number) => {
       const bug = repo.findById(bugId);
       if (!bug) return;
 
-      const fix = await vscode.window.showInputBox({ 
-        prompt: 'Edit Fix description', 
-        value: bug.fix || ''
+      const fix = await vscode.window.showInputBox({
+        prompt: 'Edit fix description',
+        value: bug.fix || '',
+        placeHolder: 'Describe what fixed this bug…'
       });
-      
-      if (!fix) return;
 
-      repo.markSolved(bugId, fix);
-      await syncFixToMemory(bug, fix);
+      // undefined = user pressed Escape; empty string = user cleared it intentionally
+      if (fix === undefined) return;
+      if (fix.trim() === '') {
+        vscode.window.showWarningMessage('BugVault: Fix description cannot be empty.');
+        return;
+      }
+
+      repo.markSolved(bugId, fix.trim());
+      await syncFixToMemory(bug, fix.trim());
 
       treeProvider.refresh();
       vscode.window.showInformationMessage(
         isSharedMemoryEnabled()
-          ? 'BugVault: Fix updated and synced to Team Memory.'
-          : 'BugVault: Fix updated successfully.'
+          ? '$(check) BugVault: Fix updated and synced to Team Memory.'
+          : '$(check) BugVault: Fix updated successfully.'
       );
     }),
 
+    // ── View Bug Details ──────────────────────────────────────────────────────
     vscode.commands.registerCommand('bugvault.showRelatedBugs', (bugId: number) => {
       showBugDetail(bugId, repo, context);
     }),
 
+    // ── Open sidebar panel ────────────────────────────────────────────────────
     vscode.commands.registerCommand('bugvault.openPanel', () => {
       vscode.commands.executeCommand('workbench.view.extension.bugvault-sidebar');
+    }),
+
+    // ── Clear solved bugs from the list ──────────────────────────────────────
+    vscode.commands.registerCommand('bugvault.clearSolved', async () => {
+      const confirm = await vscode.window.showWarningMessage(
+        'BugVault: Remove all solved bugs from the recent list? (They remain in the database.)',
+        { modal: true },
+        'Clear Solved'
+      );
+      if (confirm !== 'Clear Solved') return;
+      // The tree just re-queries; to "hide" solved, we just refresh —
+      // the listRecent call already includes all bugs, so expose a filtered view
+      treeProvider.showOnlyActive(true);
+      treeProvider.refresh();
+      vscode.window.showInformationMessage('BugVault: Solved bugs hidden from the panel.');
     })
   );
 }

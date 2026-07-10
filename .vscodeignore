@@ -1,10 +1,26 @@
-.vscode/**
-.vscode-test/**
+# Source & build config
 src/**
 test/**
-.gitignore
 tsconfig.json
-**/*.map
+.gitignore
+
+# Build artifacts not needed at runtime
 **/*.ts
+**/*.map
+.dist/**
+.supermemory/**
+
+# Dev/test files
+manual_test_list.md
+test-vscode-lm.js
+test-vscode-lm.js.map
+
+# VS Code workspace files
+.vscode/**
+.vscode-test/**
+
+# Node modules — keep only the native sqlite3 module needed at runtime
 node_modules/**
 !node_modules/better-sqlite3/**
+!node_modules/bindings/**
+!node_modules/file-uri-to-path/**

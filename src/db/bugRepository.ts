@@ -49,6 +49,7 @@ export class BugRepository {
     branch: string | null;
     commit_hash: string | null;
     language: string | null;
+    framework: string | null;
     os: string | null;
     file_path: string | null;
     error_message: string;
@@ -57,9 +58,9 @@ export class BugRepository {
     const result = this.db
       .prepare(
         `INSERT INTO bugs
-         (fingerprint, memory_id, project_name, branch, commit_hash, language, os,
+         (fingerprint, memory_id, project_name, branch, commit_hash, language, framework, os,
           file_path, error_message, status, occurrence_count, first_seen, last_seen)
-         VALUES (@fingerprint, @memory_id, @project_name, @branch, @commit_hash, @language, @os,
+         VALUES (@fingerprint, @memory_id, @project_name, @branch, @commit_hash, @language, @framework, @os,
                  @file_path, @error_message, 'active', 1, @now, @now)`
       )
       .run({ ...params, now });

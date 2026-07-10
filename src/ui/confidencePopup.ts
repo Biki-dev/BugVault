@@ -18,6 +18,8 @@ export function showConfidencePopup(
 
   if (currentPanel) {
     currentPanel.reveal(vscode.ViewColumn.Beside, true);
+    // Always update the title and content even when re-using the same panel
+    currentPanel.title = 'BugVault — Similar Bug Detected';
   } else {
     currentPanel = vscode.window.createWebviewPanel(
       'bugvaultConfidence',
@@ -32,19 +34,20 @@ export function showConfidencePopup(
     currentPanel.onDidDispose(() => {
       currentPanel = undefined;
     });
-
-    // Handle button clicks from the WebView
-    currentPanel.webview.onDidReceiveMessage(msg => {
-      if (msg.command === 'viewDetails') {
-        vscode.commands.executeCommand('bugvault.showRelatedBugs', bug.id);
-      }
-      if (msg.command === 'dismiss') {
-        currentPanel?.dispose();
-      }
-    }, undefined, context.subscriptions);
   }
 
+  // Always refresh HTML (handles both new-panel and re-reveal cases)
   currentPanel.webview.html = buildHtml(bug, pct, fromShared, teamFix);
+
+  // Re-register message handler each time so the correct `bug` closure is used
+  currentPanel.webview.onDidReceiveMessage(msg => {
+    if (msg.command === 'viewDetails') {
+      vscode.commands.executeCommand('bugvault.showRelatedBugs', bug.id);
+    }
+    if (msg.command === 'dismiss') {
+      currentPanel?.dispose();
+    }
+  }, undefined, context.subscriptions);
 }
 
 function buildHtml(bug: BugRecord, pct: number, fromShared = false, teamFix?: string): string {

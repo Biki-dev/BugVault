@@ -58,7 +58,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const tracker = new BugTracker(repo, async bugId => {
     codeLens.removeLensForBug(bugId);   // clear gutter annotation on resolve
-    await promptFixCapture(bugId, repo, supermemory);
+    await promptFixCapture(bugId, repo, supermemory, sharedSupermemory);
     treeProvider.refresh();
     statusBar.refresh();
   });

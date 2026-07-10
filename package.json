@@ -1,15 +1,39 @@
 {
   "name": "bugvault-ai",
   "displayName": "BugVault AI",
-  "description": "Automatic bug memory system — detects errors, remembers fixes, warns you when a bug repeats.",
-  "version": "0.1.0",
-  "publisher": "your-publisher-name",
+  "description": "Automatic bug memory system — detects errors, remembers fixes, warns you when a bug repeats. With team/shared memory support.",
+  "version": "1.0.0",
+  "publisher": "biki-dev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/biki-dev/BugVault"
+  },
+  "bugs": {
+    "url": "https://github.com/biki-dev/BugVault/issues"
+  },
+  "icon": "media/icon.png",
+  "keywords": [
+    "bug",
+    "error",
+    "memory",
+    "ai",
+    "debugging",
+    "productivity",
+    "team"
+  ],
+  "galleryBanner": {
+    "color": "#1a1a2e",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
     "Other",
-    "Debuggers"
+    "Debuggers",
+    "AI",
+    "Machine Learning"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -19,26 +43,35 @@
     "commands": [
       {
         "command": "bugvault.markSolved",
-        "title": "BugVault: Mark as Solved"
+        "title": "BugVault: Mark as Solved",
+        "icon": "$(check)"
       },
       {
         "command": "bugvault.saveFix",
-        "title": "BugVault: Edit Fix"
+        "title": "BugVault: Edit Fix",
+        "icon": "$(edit)"
       },
       {
         "command": "bugvault.showRelatedBugs",
-        "title": "BugVault: Show Related Bugs"
+        "title": "BugVault: Show Bug Details",
+        "icon": "$(info)"
       },
       {
         "command": "bugvault.openPanel",
-        "title": "BugVault: Open Bug Vault Panel"
+        "title": "BugVault: Open Bug Vault Panel",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "bugvault.clearSolved",
+        "title": "BugVault: Clear Solved Bugs",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
           "id": "bugvault-sidebar",
-          "title": "BugVault",
+          "title": "BugVault AI",
           "icon": "media/icon.png"
         }
       ]
@@ -52,33 +85,49 @@
         }
       ]
     },
+    "menus": {
+      "view/title": [
+        {
+          "command": "bugvault.clearSolved",
+          "when": "view == bugvault.recentBugs",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "BugVault AI",
       "properties": {
         "bugvault.supermemoryUrl": {
           "type": "string",
           "default": "http://localhost:6767",
-          "description": "URL of the local Supermemory instance."
+          "description": "URL of your personal local Supermemory instance.",
+          "order": 1
         },
         "bugvault.similarityThreshold": {
           "type": "number",
           "default": 0.82,
-          "description": "Minimum semantic similarity score (0-1) to treat a bug as repeated."
+          "minimum": 0.5,
+          "maximum": 1.0,
+          "description": "Minimum semantic similarity score (0.5–1.0) to treat a bug as repeated. Higher = stricter matching.",
+          "order": 2
         },
         "bugvault.enableAutoCapture": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically capture terminal, diagnostic, and build errors."
+          "description": "Automatically capture terminal, diagnostic, and build errors.",
+          "order": 3
         },
         "bugvault.sharedMemory.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable team/shared memory mode. When on, BugVault connects to the shared Supermemory URL so all developers share one knowledge base."
+          "description": "Enable team/shared memory mode. When on, BugVault connects to the shared Supermemory URL so all developers share one knowledge base.",
+          "order": 4
         },
         "bugvault.sharedMemory.url": {
           "type": "string",
           "default": "http://localhost:6767",
-          "description": "URL of the shared team Supermemory instance used when sharedMemory.enabled is true."
+          "description": "URL of the shared team Supermemory instance used when sharedMemory.enabled is true.",
+          "order": 5
         }
       }
     }
@@ -87,6 +136,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "package": "npx @vscode/vsce package --no-dependencies",
     "test": "vitest run"
   },
   "devDependencies": {

@@ -74,19 +74,36 @@ export class MatchEngine {
     // ── Stage C: new bug — store locally and in the active Supermemory ─────
     const gitInfo = await getGitInfo(event.cwd);
 
-    // Prefer shared memory for storage when it's available
-    const activeClient = this.sharedSupermemory ?? this.supermemory;
-    const activeAlive = this.sharedSupermemory
-      ? await this.sharedSupermemory.isAlive()
-      : personalAlive;
+    // Determine the best available client for storing new bugs.
+    // Prefer shared; fall back to personal if shared is down.
+    let storageClient: SupermemoryClient;
+    let storageAlive: boolean;
+    if (this.sharedSupermemory) {
+      const sharedOk = await this.sharedSupermemory.isAlive();
+      if (sharedOk) {
+        storageClient = this.sharedSupermemory;
+        storageAlive = true;
+      } else {
+        // Shared is configured but unreachable — use personal
+        storageClient = this.supermemory;
+        storageAlive = personalAlive;
+      }
+    } else {
+      storageClient = this.supermemory;
+      storageAlive = personalAlive;
+    }
 
     let memoryId: string | null = null;
-    if (activeAlive) {
-      memoryId = await activeClient.addMemory(normalizedText, {
-        project: event.projectName,
-        source: event.source,
-        rawText: event.rawText
-      });
+    if (storageAlive) {
+      try {
+        memoryId = await storageClient.addMemory(normalizedText, {
+          project: event.projectName,
+          source: event.source,
+          rawText: event.rawText.slice(0, 1000)
+        });
+      } catch {
+        // Memory storage failed — still create the local DB record
+      }
     }
 
     this.repo.create({
@@ -96,6 +113,7 @@ export class MatchEngine {
       branch: gitInfo.branch,
       commit_hash: gitInfo.commit,
       language: event.language ?? null,
+      framework: null,
       os: os.platform(),
       file_path: event.filePath ?? null,
       error_message: event.rawText.slice(0, 4000)
