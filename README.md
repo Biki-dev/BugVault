@@ -48,6 +48,7 @@ Whether you're dealing with terminal crashes, compilation errors, or code diagno
 # From VS Code command palette:
 # Extensions: Install from VSIX…
 # Select: bugvault-ai-1.0.0.vsix
+# npx @vscode/vsce package 2>&1
 
 # Or via CLI:
 code --install-extension ./bugvault-ai-1.0.0.vsix
