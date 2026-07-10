@@ -1,5 +1,7 @@
 # BugVault AI
 
+<img src="banner.jpg" />
+
 BugVault AI is an automatic bug memory system for VS Code that acts as your personal — and team — debugging assistant. It actively monitors your workflow, detects errors, and remembers their solutions so you never solve the same bug twice.
 
 Whether you're dealing with terminal crashes, compilation errors, or code diagnostics, BugVault AI captures the context, uses AI to generate and store solutions, and shares that knowledge across your entire team through Shared Memory Mode.
