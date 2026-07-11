@@ -248,14 +248,3 @@ This section is for maintainers who need to publish new versions of the BugVault
 ## 📝 License
 
 This project is licensed under the [MIT License](LICENSE).
-
----
-
-## References
-
-[1] `BugVault/src/capture/diagnosticsWatcher.ts`
-[2] `BugVault/src/commands/registerCommands.ts`
-[3] `BugVault/src/memory/matchEngine.ts`
-[4] `BugVault/src/lifecycle/fixCapture.ts`
-[5] `BugVault/src/ui/bugDetailView.ts`
-[6] `BugVault/manual_test_list.md`
