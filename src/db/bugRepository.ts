@@ -106,4 +106,65 @@ export class BugRepository {
       .prepare('UPDATE bugs SET memory_id = ? WHERE id = ?')
       .run(memoryId, id);
   }
+
+  exportAll(): BugRecord[] {
+    return this.db.prepare('SELECT * FROM bugs').all() as BugRecord[];
+  }
+
+  importData(bugs: any[]): { imported: number, updated: number, skipped: number } {
+    let imported = 0;
+    let updated = 0;
+    let skipped = 0;
+    const insert = this.db.prepare(`
+      INSERT INTO bugs
+      (fingerprint, memory_id, project_name, branch, commit_hash, language, framework, os,
+       file_path, error_message, root_cause, fix, dev_notes, severity, status, occurrence_count, first_seen, last_seen, solved_at)
+      VALUES (@fingerprint, @memory_id, @project_name, @branch, @commit_hash, @language, @framework, @os,
+              @file_path, @error_message, @root_cause, @fix, @dev_notes, @severity, @status, @occurrence_count, @first_seen, @last_seen, @solved_at)
+    `);
+
+    const transaction = this.db.transaction((bugsToImport: any[]) => {
+      for (const bug of bugsToImport) {
+        if (!bug || typeof bug.fingerprint !== 'string') {
+          skipped++;
+          continue;
+        }
+        const existing = this.findByFingerprint(bug.fingerprint);
+        if (existing) {
+          if (existing.status === 'active' && bug.status === 'solved') {
+             this.markSolved(existing.id, bug.fix || '', bug.root_cause || undefined, bug.dev_notes || undefined);
+             updated++;
+          } else {
+             skipped++;
+          }
+        } else {
+          insert.run({
+            fingerprint: bug.fingerprint,
+            memory_id: bug.memory_id ?? null,
+            project_name: bug.project_name ?? 'unknown',
+            branch: bug.branch ?? null,
+            commit_hash: bug.commit_hash ?? null,
+            language: bug.language ?? null,
+            framework: bug.framework ?? null,
+            os: bug.os ?? null,
+            file_path: bug.file_path ?? null,
+            error_message: bug.error_message ?? 'unknown',
+            root_cause: bug.root_cause ?? null,
+            fix: bug.fix ?? null,
+            dev_notes: bug.dev_notes ?? null,
+            severity: bug.severity ?? 'unknown',
+            status: bug.status ?? 'active',
+            occurrence_count: bug.occurrence_count ?? 1,
+            first_seen: bug.first_seen ?? Date.now(),
+            last_seen: bug.last_seen ?? Date.now(),
+            solved_at: bug.solved_at ?? null,
+          });
+          imported++;
+        }
+      }
+    });
+
+    transaction(bugs);
+    return { imported, updated, skipped };
+  }
 }

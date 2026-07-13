@@ -176,6 +176,66 @@ export function registerCommands(
       treeProvider.showOnlyActive(true);
       treeProvider.refresh();
       vscode.window.showInformationMessage('BugVault: Solved bugs hidden from the panel.');
+    }),
+
+    // ── Export Bug Memory ───────────────────────────────────────────────────
+    vscode.commands.registerCommand('bugvault.exportData', async () => {
+      const defaultUri = vscode.Uri.file(
+        vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+          ? vscode.workspace.workspaceFolders[0].uri.fsPath + '/bugvault-export.json'
+          : 'bugvault-export.json'
+      );
+
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri,
+        title: 'Export BugVault Data',
+        filters: { 'JSON Files': ['json'] },
+        saveLabel: 'Export'
+      });
+      if (!uri) return;
+
+      try {
+        let filePath = uri.fsPath;
+        if (!filePath.toLowerCase().endsWith('.json')) {
+          filePath += '.json';
+        }
+        const finalUri = vscode.Uri.file(filePath);
+
+        const data = repo.exportAll();
+        const content = new Uint8Array(Buffer.from(JSON.stringify(data, null, 2), 'utf-8'));
+        await vscode.workspace.fs.writeFile(finalUri, content);
+        vscode.window.showInformationMessage(`BugVault: Exported ${data.length} bugs successfully to ${filePath}.`);
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`BugVault Export Failed: ${err.message}`);
+      }
+    }),
+
+    // ── Import Bug Memory ───────────────────────────────────────────────────
+    vscode.commands.registerCommand('bugvault.importData', async () => {
+      const uris = await vscode.window.showOpenDialog({
+        title: 'Import BugVault Data',
+        canSelectMany: false,
+        filters: { 'JSON Files': ['json'] },
+        openLabel: 'Import'
+      });
+      if (!uris || uris.length === 0) return;
+
+      try {
+        const fileData = await vscode.workspace.fs.readFile(uris[0]);
+        const jsonStr = Buffer.from(fileData).toString('utf-8');
+        const data = JSON.parse(jsonStr);
+
+        if (!Array.isArray(data)) {
+          vscode.window.showErrorMessage('BugVault Import Failed: Invalid data format (expected an array).');
+          return;
+        }
+
+        const result = repo.importData(data);
+        treeProvider.refresh();
+        vscode.window.showInformationMessage(`BugVault: Imported ${result.imported} new bugs, updated ${result.updated}, skipped ${result.skipped} existing.`);
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`BugVault Import Failed: ${err.message}`);
+      }
     })
   );
 }

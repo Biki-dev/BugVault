@@ -65,6 +65,16 @@
         "command": "bugvault.clearSolved",
         "title": "BugVault: Clear Solved Bugs",
         "icon": "$(trash)"
+      },
+      {
+        "command": "bugvault.exportData",
+        "title": "BugVault: Export Memory",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "bugvault.importData",
+        "title": "BugVault: Import Memory",
+        "icon": "$(cloud-download)"
       }
     ],
     "viewsContainers": {
@@ -89,6 +99,16 @@
       "view/title": [
         {
           "command": "bugvault.clearSolved",
+          "when": "view == bugvault.recentBugs",
+          "group": "navigation"
+        },
+        {
+          "command": "bugvault.exportData",
+          "when": "view == bugvault.recentBugs",
+          "group": "navigation"
+        },
+        {
+          "command": "bugvault.importData",
           "when": "view == bugvault.recentBugs",
           "group": "navigation"
         }
